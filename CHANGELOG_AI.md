@@ -15,3 +15,4 @@ Hver gang du som agent har fullført en oppgave (eller en økt), MÅ du legge ti
 - Skrev `agents.md` protokoll for fremtidig multi-agent-samarbeid, og la til GitHub Actions-workflow for utrulling.
 - Justerte ned-sampling for "alle ord" fra 2000 til 500 for å unngå minnekrasj i Chrome.
 - Endret standardvisning (default) til Totalfrekvens (Grand Total).
+- Oppdaterte git remote og Vite config (base path) etter flytting av repo til nationallibraryofnorway/ordtelling.
