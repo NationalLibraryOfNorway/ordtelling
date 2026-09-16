@@ -6,7 +6,7 @@ const DHLAB_API_URL = "https://api.nb.no/dhlab/frequencies";
  * @param {number} maxLimit 
  * @returns {Array<string>} Sampled URNs
  */
-const sampleUrns = (urns, maxLimit = 2000) => {
+const sampleUrns = (urns, maxLimit = 500) => {
   if (urns.length <= maxLimit) return urns;
   
   // Create a copy to shuffle
@@ -88,10 +88,10 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   const isAllWords = words.length === 0;
   
   // If fetching "all words" on a huge corpus, sample it down to avoid crashing the API/Browser
-  const targetUrns = isAllWords ? sampleUrns(allUrns, 2000) : allUrns;
+  const targetUrns = isAllWords ? sampleUrns(allUrns, 500) : allUrns;
 
   // We batch URNs to not send overly large JSON payloads. 
-  // For "all words", we might still batch if we want, but 2000 URNs in one go is usually fine.
+  // For "all words", we might still batch if we want, but 500 URNs in one go is usually fine.
   // For wordlists, we can process larger amounts by chunking.
   const BATCH_SIZE = 500; 
   const urnChunks = chunkArray(targetUrns, BATCH_SIZE);

@@ -82,7 +82,7 @@ function App() {
               </h3>
               <p className="text-sm text-gray-600 mb-4">
                 Tell opp <i>alle</i> ord i korpuset. 
-                {corpus.size > 2000 && <span className="text-amber-600 ml-1 font-medium">Ned-sampling aktiveres.</span>}
+                {corpus.size > 500 && <span className="text-amber-600 ml-1 font-medium">Ned-sampling aktiveres.</span>}
               </p>
               <div className="flex-grow">
                 <AllWordsForm corpus={corpus} onResult={handleResults} />

@@ -88,7 +88,7 @@ export function AllWordsForm({ corpus, onResult }) {
     <div className="flex flex-col h-full">
       <div className="bg-amber-50 p-4 rounded-md text-sm text-amber-800 mb-6 flex-grow">
         <strong>Viktig informasjon:</strong> Å hente alle ord tar tid og resulterer i store datamengder. 
-        Dersom korpuset er veldig stort ({corpus.size} tekster), vil vi automatisk sample det ned til maksimalt 2000 tilfeldige tekster for å unngå krasj.
+        Dersom korpuset er veldig stort ({corpus.size} tekster), vil vi automatisk sample det ned til maksimalt 500 tilfeldige tekster for å unngå krasj.
       </div>
       
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
