@@ -1,20 +1,27 @@
 import React, { useState, useMemo } from 'react';
-import { Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, List, Grid } from 'lucide-react';
+import { Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
 import { exportToExcel, exportToCsv } from '../utils/fileParser';
-import { pivotResults } from '../utils/pivot';
+import { pivotWordsAsRows, pivotDocsAsRows, aggregateGrandTotal } from '../utils/pivot';
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
-  const [isPivoted, setIsPivoted] = useState(false);
+  const [viewMode, setViewMode] = useState('long'); // 'long', 'grand_total', 'pivot_words', 'pivot_docs'
   const rowsPerPage = 50;
 
-  // Derive data based on pivot mode
+  // Derive data based on view mode
   const activeData = useMemo(() => {
-    if (isPivoted) {
-      return pivotResults(results);
+    switch (viewMode) {
+      case 'grand_total':
+        return aggregateGrandTotal(results);
+      case 'pivot_words':
+        return pivotWordsAsRows(results);
+      case 'pivot_docs':
+        return pivotDocsAsRows(results);
+      case 'long':
+      default:
+        return results;
     }
-    return results;
-  }, [results, isPivoted]);
+  }, [results, viewMode]);
 
   // Compute pagination
   const totalPages = Math.ceil(activeData.length / rowsPerPage);
@@ -22,36 +29,42 @@ export default function ResultsView({ results, queryName }) {
     return activeData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
   }, [activeData, page]);
 
-  // Handle page resets when switching modes
-  const handleTogglePivot = () => {
-    setIsPivoted(prev => !prev);
+  // Handle mode change
+  const handleModeChange = (e) => {
+    setViewMode(e.target.value);
     setPage(0);
   };
 
-  // Extract headers (columns) dynamically from the first result object
+  // Extract headers dynamically
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
     const allKeys = Object.keys(activeData[0]);
     
-    if (isPivoted) {
-      // In pivoted mode, 'word' comes first, then dhlabids
+    if (viewMode === 'pivot_words') {
       return ['word', ...allKeys.filter(k => k !== 'word')];
+    } else if (viewMode === 'pivot_docs') {
+      // Prioritize dhlabid and metadata, then words
+      const metadata = ['dhlabid', 'urn', 'title', 'authors', 'year']; // Common metadata fields
+      const availableMeta = metadata.filter(k => allKeys.includes(k));
+      const otherMeta = allKeys.filter(k => !metadata.includes(k) && isNaN(activeData[0][k]) && k !== 'dhlabid');
+      const words = allKeys.filter(k => !availableMeta.includes(k) && !otherMeta.includes(k));
+      return [...availableMeta, ...otherMeta, ...words];
+    } else if (viewMode === 'grand_total') {
+      return ['word', 'total_freq', 'docs_count'];
     } else {
-      // In long mode, prioritize standard columns, then metadata
+      // Long mode
       const prioritized = ['dhlabid', 'word', 'freq', 'total_words'];
       const others = allKeys.filter(k => !prioritized.includes(k));
       return [...prioritized, ...others];
     }
-  }, [activeData, isPivoted]);
+  }, [activeData, viewMode]);
 
   const handleExportExcel = () => {
-    const formatName = isPivoted ? 'krysstabell' : 'langformat';
-    exportToExcel(activeData, `korpus_${formatName}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    exportToExcel(activeData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
 
   const handleExportCsv = () => {
-    const formatName = isPivoted ? 'krysstabell' : 'langformat';
-    exportToCsv(activeData, `korpus_${formatName}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    exportToCsv(activeData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
   };
 
   return (
@@ -59,47 +72,45 @@ export default function ResultsView({ results, queryName }) {
       
       {/* Action bar */}
       <div className="flex flex-wrap items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center space-x-4">
+        
+        <div className="flex items-center space-x-4 mb-4 sm:mb-0">
           <div className="flex items-center text-gray-700">
             <Table className="mr-2 h-5 w-5 text-blue-500" />
-            <span className="font-medium">Fant {activeData.length.toLocaleString('no-NO')} datarader</span>
+            <span className="font-medium">Fant {activeData.length.toLocaleString('no-NO')} rader</span>
           </div>
           
-          <div className="h-6 w-px bg-gray-300 mx-2 hidden sm:block"></div>
+          <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
           
-          {/* Toggle Button */}
-          <button
-            onClick={handleTogglePivot}
-            className="flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors"
-          >
-            {isPivoted ? (
-              <>
-                <List className="mr-2 h-4 w-4" />
-                Vis Langt Format
-              </>
-            ) : (
-              <>
-                <Grid className="mr-2 h-4 w-4" />
-                Vis som Krysstabell (Pivot)
-              </>
-            )}
-          </button>
+          {/* View Mode Selector */}
+          <div className="flex items-center bg-gray-50 rounded-md border border-gray-200 p-1">
+            <Settings2 className="h-4 w-4 text-gray-500 ml-2 mr-1" />
+            <select 
+              value={viewMode} 
+              onChange={handleModeChange}
+              className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer outline-none py-1 pr-8"
+            >
+              <option value="long">Standard (Langformat)</option>
+              <option value="grand_total">Totalfrekvens (Grand Total)</option>
+              <option value="pivot_words">Krysstabell (Ord som rader)</option>
+              <option value="pivot_docs">Krysstabell (Bøker som rader)</option>
+            </select>
+          </div>
         </div>
         
-        <div className="flex space-x-3 mt-4 sm:mt-0">
+        <div className="flex space-x-3">
           <button 
             onClick={handleExportCsv}
             className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             <Download className="mr-2 h-4 w-4 text-gray-500" />
-            Last ned CSV
+            CSV
           </button>
           <button 
             onClick={handleExportExcel}
             className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors shadow-sm"
           >
             <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Last ned Excel
+            Excel
           </button>
         </div>
       </div>
@@ -135,7 +146,7 @@ export default function ResultsView({ results, queryName }) {
         {totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
             <span className="text-sm text-gray-700">
-              Viser {page * rowsPerPage + 1} til {Math.min((page + 1) * rowsPerPage, activeData.length)} av {activeData.length} resultater
+              Viser {page * rowsPerPage + 1} til {Math.min((page + 1) * rowsPerPage, activeData.length)} av {activeData.length} rader
             </span>
             <div className="flex space-x-2">
               <button 
