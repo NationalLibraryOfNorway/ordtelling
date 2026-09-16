@@ -101,7 +101,16 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   for (let i = 0; i < urnChunks.length; i++) {
     const chunk = urnChunks[i];
     try {
-      const batchResult = await fetchFrequenciesBatch(chunk, words);
+      let batchResult = await fetchFrequenciesBatch(chunk, words);
+      
+      // The API returns differently based on if words were provided:
+      // Words provided: [ [dhlabid, word, freq, total], ... ]
+      // No words (all): [ [[dhlabid, word, freq], ...], [[dhlabid, word, freq], ...] ]
+      if (isAllWords && Array.isArray(batchResult) && batchResult.length > 0) {
+        // Flatten the array by one level
+        batchResult = batchResult.flat();
+      }
+      
       allResults = allResults.concat(batchResult);
     } catch (error) {
       console.error(`Feil ved henting av batch ${i + 1}:`, error);
@@ -113,8 +122,11 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   }
 
   // Combine the results with the metadata
-  // batchResult format: [dhlabid, word, frequency, total_words]
+  // batchResult format: [dhlabid, word, freq, total_words (optional)]
   const combinedResults = allResults.map(apiRow => {
+    // Check if apiRow is actually an array to prevent crashes on weird responses
+    if (!Array.isArray(apiRow)) return null;
+    
     const [dhlabid, word, freq, total] = apiRow;
     const meta = metadataMap.get(String(dhlabid)) || {};
     
@@ -123,9 +135,9 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
       dhlabid,
       word,
       freq,
-      total_words: total
+      total_words: total || ""
     };
-  });
+  }).filter(Boolean); // Remove any nulls from invalid rows
 
   return combinedResults;
 };
