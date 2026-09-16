@@ -5,7 +5,7 @@ import { pivotWordsAsRows, pivotDocsAsRows, aggregateGrandTotal } from '../utils
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
-  const [viewMode, setViewMode] = useState('long'); // 'long', 'grand_total', 'pivot_words', 'pivot_docs'
+  const [viewMode, setViewMode] = useState('grand_total'); // 'long', 'grand_total', 'pivot_words', 'pivot_docs'
   const rowsPerPage = 50;
 
   // Derive data based on view mode
@@ -89,8 +89,8 @@ export default function ResultsView({ results, queryName }) {
               onChange={handleModeChange}
               className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer outline-none py-1 pr-8"
             >
-              <option value="long">Standard (Langformat)</option>
               <option value="grand_total">Totalfrekvens (Grand Total)</option>
+              <option value="long">Standard (Langformat)</option>
               <option value="pivot_words">Krysstabell (Ord som rader)</option>
               <option value="pivot_docs">Krysstabell (Bøker som rader)</option>
             </select>
