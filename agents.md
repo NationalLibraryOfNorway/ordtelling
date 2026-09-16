@@ -1,33 +1,31 @@
-# Agents and Workflow for Tell-Korpus PWA
+# AI Multi-Agent Protocol for Tell-Korpus PWA
 
-Dette dokumentet definerer ansvarsområdene (eller "agent-rollene") for AI-assistenten i utviklingen av denne PWA-en.
+Dette dokumentet definerer reglene for hvordan ulike AI-assistenter (for eksempel GitHub Copilot, ChatGPT, Antigravity, Claude) skal samarbeide om denne kodebasen. 
 
-Når man bygger appen fra bunnen, bør arbeidet deles opp i følgende faser og ansvarsområder:
+Siden AI-agenter mangler delt minne og byttes ut på tvers av verktøy, fungerer dette dokumentet (sammen med `CHANGELOG_AI.md` og `manifest.md`) som den sentrale, stabile kommunikasjonsflaten.
 
-## 1. Oppsett og Struktur (Boilerplate Agent)
-- **Ansvar:** Etablere Vite-prosjekt (React/JS), installere avhengigheter (f.eks. Tailwind, XLSX/PapaParse). Sette opp manifest og Service Worker for PWA.
-- **Output:** Et kjørbart "Hello World" grensesnitt.
+## 🤖 Obligatoriske Regler for Alle AI-Agenter
+Når du som en AI-assistent starter en ny oppgave eller økt i dette prosjektet, MÅ du følge denne protokollen:
 
-## 2. Datahåndtering (Data & Parsing Agent)
-- **Ansvar:** Lage funksjonalitet for å laste opp CSV- eller Excel-filer direkte i nettleseren (ingen backend).
-- **Krav:** 
-  - Verifiser at kolonnene `urn` og `dhlabid` eksisterer.
-  - Sørge for at appens state holder på disse verdiene.
-  - Integrere funksjonalitet for "sampling" av store korpus (over 2000 URN-er) dersom bruker ønsker et frekvensoppslag på "alle ord".
+1. **Les alltid disse filene først (Før du skriver kode):**
+   - `manifest.md` for å forstå arkitekturen og kravene.
+   - `CHANGELOG_AI.md` for å se hva forrige agent gjorde sist.
 
-## 3. DH-Lab API Integrasjon (Network Agent)
-- **Ansvar:** Skrive asynkrone JavaScript-funksjoner for oppslag mot `https://api.nb.no/dhlab/frequencies`.
-- **Krav:** 
-  - Støtte to modi: `Alle ord` (tom liste med ord) og `Ordliste` (liste med ord oppgitt fra grensesnittet).
-  - Konstruere POST-forespørsler der `urn` fra korpuset brukes for oppslag.
-  - Håndtere at API-et returnerer en respons knyttet mot `dhlabid`, og slå dette sammen med korpus-metadaten lest inn fra start.
-  - Implementere batching for ordlistesøk der korpuset er veldig stort.
+2. **Hold deg til eksisterende arkitektur:**
+   - Prosjektet er en Frontend-only PWA (Vite + React + Tailwind). **Ingen backend** skal bygges. 
+   - Hold koden i funksjonelle React-komponenter, og plasser all hjelpelogikk i `src/utils/`.
 
-## 4. Visualisering og Eksport (UI/UX Agent)
-- **Ansvar:** Vise resultatet i grensesnittet (for eksempel i en datatabell eller aggregerte grafer).
-- **Krav:**
-  - Enkel og rask respons i grensesnittet.
-  - Funksjonalitet for å laste ned det ferdige telle-resultatet som ny CSV/Excel-fil slik at forskeren kan analysere dataen videre.
+3. **Dokumentér alltid arbeidet ditt:**
+   - Før du avslutter økten (eller før du pusher koden), MÅ du oppdatere `CHANGELOG_AI.md`.
+   - Skriv inn dagens dato, hvem du er (eks. "ChatGPT-4o" eller "Copilot"), og en punktliste over funksjonaliteten du implementerte, fikset eller modifiserte. Dette sikrer at neste agent vet nøyaktig hva som er gjort.
+
+## Arkitektur & Ansvarsområder
+Koden er delt opp i følgende kjerneområder. Hvis du skal jobbe med en spesifikk feature, finn riktig fil:
+
+- **UI & Skjemaer:** `src/App.jsx` og `src/components/ActionForms.jsx`.
+- **Visning av Data (Tabell/Pivot):** `src/components/ResultsView.jsx` og `src/utils/pivot.js`.
+- **Parsing (Excel/CSV):** `src/components/FileUploader.jsx` og `src/utils/fileParser.js`.
+- **Nettverk mot DH-lab API:** `src/utils/dhlabApi.js`.
 
 ---
-**Instruksjoner til videre arbeid:** Start med å utføre rollen til *Oppsett og Struktur*, og beveg deg gradvis nedover i listen. Hver agent/steg bør kvalitetssikres før man går videre.
+*Kjære AI: Takk for at du følger protokollen. Legg gjerne til egne punkter her hvis du oppdager mønstre eller regler som vil gjøre det enklere for fremtidige agenter å forstå kodebasen.*
