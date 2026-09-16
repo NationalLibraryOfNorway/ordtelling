@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { FileText, Search, BarChart3, CheckCircle, ArrowLeft } from 'lucide-react';
 import FileUploader from './components/FileUploader';
 import { WordlistForm, AllWordsForm } from './components/ActionForms';
+import ResultsView from './components/ResultsView';
 
 function App() {
   const [corpus, setCorpus] = useState(null);
@@ -91,22 +92,19 @@ function App() {
         )}
 
         {results && (
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium">Resultater: {queryName}</h3>
+              <h3 className="text-xl font-medium text-gray-900">Resultater: {queryName}</h3>
               <button 
                 onClick={handleBackToSearch}
-                className="flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
               >
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 Tilbake til søk
               </button>
             </div>
             
-            <div className="p-8 bg-gray-50 border border-gray-200 rounded-md text-center text-gray-500 italic">
-              <p className="mb-2">Fant {results.length} datarader.</p>
-              <p>Visualisering og eksport av resultatene kommer her (Steg 4).</p>
-            </div>
+            <ResultsView results={results} queryName={queryName} />
           </div>
         )}
       </main>
