@@ -1,33 +1,57 @@
 import React, { useState, useMemo } from 'react';
-import { Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, List, Grid } from 'lucide-react';
 import { exportToExcel, exportToCsv } from '../utils/fileParser';
+import { pivotResults } from '../utils/pivot';
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
+  const [isPivoted, setIsPivoted] = useState(false);
   const rowsPerPage = 50;
 
+  // Derive data based on pivot mode
+  const activeData = useMemo(() => {
+    if (isPivoted) {
+      return pivotResults(results);
+    }
+    return results;
+  }, [results, isPivoted]);
+
   // Compute pagination
-  const totalPages = Math.ceil(results.length / rowsPerPage);
+  const totalPages = Math.ceil(activeData.length / rowsPerPage);
   const displayData = useMemo(() => {
-    return results.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
-  }, [results, page]);
+    return activeData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
+  }, [activeData, page]);
+
+  // Handle page resets when switching modes
+  const handleTogglePivot = () => {
+    setIsPivoted(prev => !prev);
+    setPage(0);
+  };
 
   // Extract headers (columns) dynamically from the first result object
-  // Put word, freq, total_words first, then metadata
   const headers = useMemo(() => {
-    if (results.length === 0) return [];
-    const allKeys = Object.keys(results[0]);
-    const prioritized = ['dhlabid', 'word', 'freq', 'total_words'];
-    const others = allKeys.filter(k => !prioritized.includes(k));
-    return [...prioritized, ...others];
-  }, [results]);
+    if (activeData.length === 0) return [];
+    const allKeys = Object.keys(activeData[0]);
+    
+    if (isPivoted) {
+      // In pivoted mode, 'word' comes first, then dhlabids
+      return ['word', ...allKeys.filter(k => k !== 'word')];
+    } else {
+      // In long mode, prioritize standard columns, then metadata
+      const prioritized = ['dhlabid', 'word', 'freq', 'total_words'];
+      const others = allKeys.filter(k => !prioritized.includes(k));
+      return [...prioritized, ...others];
+    }
+  }, [activeData, isPivoted]);
 
   const handleExportExcel = () => {
-    exportToExcel(results, `korpus_frekvenser_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    const formatName = isPivoted ? 'krysstabell' : 'langformat';
+    exportToExcel(activeData, `korpus_${formatName}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
 
   const handleExportCsv = () => {
-    exportToCsv(results, `korpus_frekvenser_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    const formatName = isPivoted ? 'krysstabell' : 'langformat';
+    exportToCsv(activeData, `korpus_${formatName}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
   };
 
   return (
@@ -35,9 +59,31 @@ export default function ResultsView({ results, queryName }) {
       
       {/* Action bar */}
       <div className="flex flex-wrap items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="flex items-center text-gray-700">
-          <Table className="mr-2 h-5 w-5 text-blue-500" />
-          <span className="font-medium">Fant {results.length.toLocaleString('no-NO')} datarader</span>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center text-gray-700">
+            <Table className="mr-2 h-5 w-5 text-blue-500" />
+            <span className="font-medium">Fant {activeData.length.toLocaleString('no-NO')} datarader</span>
+          </div>
+          
+          <div className="h-6 w-px bg-gray-300 mx-2 hidden sm:block"></div>
+          
+          {/* Toggle Button */}
+          <button
+            onClick={handleTogglePivot}
+            className="flex items-center px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors"
+          >
+            {isPivoted ? (
+              <>
+                <List className="mr-2 h-4 w-4" />
+                Vis Langt Format
+              </>
+            ) : (
+              <>
+                <Grid className="mr-2 h-4 w-4" />
+                Vis som Krysstabell (Pivot)
+              </>
+            )}
+          </button>
         </div>
         
         <div className="flex space-x-3 mt-4 sm:mt-0">
@@ -89,7 +135,7 @@ export default function ResultsView({ results, queryName }) {
         {totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
             <span className="text-sm text-gray-700">
-              Viser {page * rowsPerPage + 1} til {Math.min((page + 1) * rowsPerPage, results.length)} av {results.length} resultater
+              Viser {page * rowsPerPage + 1} til {Math.min((page + 1) * rowsPerPage, activeData.length)} av {activeData.length} resultater
             </span>
             <div className="flex space-x-2">
               <button 
