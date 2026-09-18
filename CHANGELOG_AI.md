@@ -7,6 +7,11 @@ Hver gang du som agent har fullført en oppgave (eller en økt), MÅ du legge ti
 
 ---
 
+### [2026-09-18] - Copilot
+- La til klikkbar sortering i resultat-tabellen slik at brukeren kan sortere på ønsket kolonne.
+- La til stigende/synkende sorteringsveksling og visuelle indikatorer i kolonneoverskriftene.
+- Sørget for at eksport følger valgt sortering, og at sortering nullstilles ved bytte av tabellvisning.
+
 ### [2026-09-16] - Antigravity (Gemini)
 - Etablerte standard Vite+React+Tailwind miljø.
 - Bygde logikk for parsing av CSV/Excel via `papaparse` og `xlsx` (Steg 2).
