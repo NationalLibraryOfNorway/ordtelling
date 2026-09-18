@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
 import { exportToExcel, exportToCsv } from '../utils/fileParser';
 import { pivotWordsAsRows, pivotDocsAsRows, aggregateGrandTotal } from '../utils/pivot';
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
   const [viewMode, setViewMode] = useState('grand_total'); // 'long', 'grand_total', 'pivot_words', 'pivot_docs'
+  const [sortConfig, setSortConfig] = useState(null);
   const rowsPerPage = 50;
 
   // Derive data based on view mode
@@ -23,15 +24,10 @@ export default function ResultsView({ results, queryName }) {
     }
   }, [results, viewMode]);
 
-  // Compute pagination
-  const totalPages = Math.ceil(activeData.length / rowsPerPage);
-  const displayData = useMemo(() => {
-    return activeData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
-  }, [activeData, page]);
-
   // Handle mode change
   const handleModeChange = (e) => {
     setViewMode(e.target.value);
+    setSortConfig(null);
     setPage(0);
   };
 
@@ -59,12 +55,67 @@ export default function ResultsView({ results, queryName }) {
     }
   }, [activeData, viewMode]);
 
+  const numericColumns = useMemo(() => {
+    return headers.reduce((acc, header) => {
+      const values = activeData
+        .map((row) => row[header])
+        .filter((value) => value !== null && value !== undefined && value !== '');
+
+      acc[header] = values.length > 0 && values.every((value) => !Number.isNaN(Number(value)));
+      return acc;
+    }, {});
+  }, [activeData, headers]);
+
+  const sortedData = useMemo(() => {
+    if (!sortConfig) return activeData;
+
+    const { key, direction } = sortConfig;
+    const sortMultiplier = direction === 'asc' ? 1 : -1;
+
+    return [...activeData].sort((a, b) => {
+      const aValue = a[key];
+      const bValue = b[key];
+
+      if (aValue === bValue) return 0;
+      if (aValue === null || aValue === undefined || aValue === '') return 1;
+      if (bValue === null || bValue === undefined || bValue === '') return -1;
+
+      if (numericColumns[key]) {
+        return (Number(aValue) - Number(bValue)) * sortMultiplier;
+      }
+
+      return String(aValue).localeCompare(String(bValue), 'no') * sortMultiplier;
+    });
+  }, [activeData, numericColumns, sortConfig]);
+
+  const totalPages = Math.ceil(sortedData.length / rowsPerPage);
+  const displayData = useMemo(() => {
+    return sortedData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
+  }, [page, sortedData]);
+
+  const handleSort = (header) => {
+    setSortConfig((currentSort) => {
+      if (currentSort?.key === header) {
+        return {
+          key: header,
+          direction: currentSort.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+
+      return {
+        key: header,
+        direction: numericColumns[header] ? 'desc' : 'asc',
+      };
+    });
+    setPage(0);
+  };
+
   const handleExportExcel = () => {
-    exportToExcel(activeData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    exportToExcel(sortedData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
 
   const handleExportCsv = () => {
-    exportToCsv(activeData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    exportToCsv(sortedData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
   };
 
   return (
@@ -122,8 +173,23 @@ export default function ResultsView({ results, queryName }) {
             <thead className="bg-gray-50 text-gray-700 font-semibold">
               <tr>
                 {headers.map(header => (
-                  <th key={header} className="px-6 py-3 uppercase tracking-wider whitespace-nowrap">
-                    {header}
+                  <th key={header} className="px-6 py-3 uppercase tracking-wider whitespace-nowrap" aria-sort={sortConfig?.key === header ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button
+                      type="button"
+                      onClick={() => handleSort(header)}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <span>{header}</span>
+                      {sortConfig?.key === header ? (
+                        sortConfig.direction === 'asc' ? (
+                          <ArrowUp className="h-4 w-4" />
+                        ) : (
+                          <ArrowDown className="h-4 w-4" />
+                        )
+                      ) : (
+                        <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
                   </th>
                 ))}
               </tr>
