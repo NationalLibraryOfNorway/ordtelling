@@ -89,9 +89,10 @@ export default function ResultsView({ results, queryName }) {
   }, [activeData, numericColumns, sortConfig]);
 
   const totalPages = Math.ceil(sortedData.length / rowsPerPage);
+  const currentPage = totalPages > 0 ? Math.min(page, totalPages - 1) : 0;
   const displayData = useMemo(() => {
-    return sortedData.slice(page * rowsPerPage, (page + 1) * rowsPerPage);
-  }, [page, sortedData]);
+    return sortedData.slice(currentPage * rowsPerPage, (currentPage + 1) * rowsPerPage);
+  }, [currentPage, sortedData]);
 
   const handleSort = (header) => {
     setSortConfig((currentSort) => {
@@ -108,6 +109,14 @@ export default function ResultsView({ results, queryName }) {
       };
     });
     setPage(0);
+  };
+
+  const getNextSortDirection = (header) => {
+    if (sortConfig?.key === header) {
+      return sortConfig.direction === 'asc' ? 'desc' : 'asc';
+    }
+
+    return numericColumns[header] ? 'desc' : 'asc';
   };
 
   const handleExportExcel = () => {
@@ -177,6 +186,7 @@ export default function ResultsView({ results, queryName }) {
                     <button
                       type="button"
                       onClick={() => handleSort(header)}
+                      aria-label={`Sorter etter ${header} ${getNextSortDirection(header) === 'asc' ? 'stigende' : 'synkende'}`}
                       className="flex items-center gap-2 cursor-pointer"
                     >
                       <span>{header}</span>
@@ -212,19 +222,19 @@ export default function ResultsView({ results, queryName }) {
         {totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
             <span className="text-sm text-gray-700">
-              Viser {page * rowsPerPage + 1} til {Math.min((page + 1) * rowsPerPage, activeData.length)} av {activeData.length} rader
+              Viser {currentPage * rowsPerPage + 1} til {Math.min((currentPage + 1) * rowsPerPage, activeData.length)} av {activeData.length} rader
             </span>
             <div className="flex space-x-2">
               <button 
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
+                onClick={() => setPage(Math.max(0, currentPage - 1))}
+                disabled={currentPage === 0}
                 className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button 
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page === totalPages - 1}
+                onClick={() => setPage(Math.min(totalPages - 1, currentPage + 1))}
+                disabled={currentPage === totalPages - 1}
                 className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
               >
                 <ChevronRight className="h-4 w-4" />
