@@ -222,7 +222,7 @@ export default function ResultsView({ results, queryName }) {
         {totalPages > 1 && (
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
             <span className="text-sm text-gray-700">
-              Viser {currentPage * rowsPerPage + 1} til {Math.min((currentPage + 1) * rowsPerPage, activeData.length)} av {activeData.length} rader
+              Viser {currentPage * rowsPerPage + 1} til {Math.min((currentPage + 1) * rowsPerPage, sortedData.length)} av {sortedData.length} rader
             </span>
             <div className="flex space-x-2">
               <button 
