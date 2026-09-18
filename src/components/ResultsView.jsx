@@ -119,12 +119,9 @@ export default function ResultsView({ results, queryName }) {
     return numericColumns[header] ? 'desc' : 'asc';
   };
 
-  const getSortLabel = (header) => {
-    const isActiveSort = sortConfig?.key === header;
-    const currentDirection = isActiveSort ? (sortConfig.direction === 'asc' ? 'stigende' : 'synkende') : 'ikke sortert';
+  const getSortActionLabel = (header) => {
     const nextDirection = getNextSortDirection(header) === 'asc' ? 'stigende' : 'synkende';
-
-    return `Sorter etter ${header}. Nå ${currentDirection}. Aktiver for ${nextDirection} sortering.`;
+    return `Sorter etter ${header} ${nextDirection}`;
   };
 
   const handleExportExcel = () => {
@@ -190,12 +187,15 @@ export default function ResultsView({ results, queryName }) {
             <thead className="bg-gray-50 text-gray-700 font-semibold">
               <tr>
                 {headers.map(header => (
-                  <th key={header} className="px-6 py-3 uppercase tracking-wider whitespace-nowrap">
+                  <th
+                    key={header}
+                    className="px-6 py-3 uppercase tracking-wider whitespace-nowrap"
+                    aria-sort={sortConfig?.key === header ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                  >
                     <button
                       type="button"
                       onClick={() => handleSort(header)}
-                      aria-label={getSortLabel(header)}
-                      aria-pressed={sortConfig?.key === header}
+                      aria-label={getSortActionLabel(header)}
                       className="flex items-center gap-2 cursor-pointer"
                     >
                       <span>{header}</span>
