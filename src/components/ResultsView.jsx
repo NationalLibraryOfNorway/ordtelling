@@ -119,6 +119,14 @@ export default function ResultsView({ results, queryName }) {
     return numericColumns[header] ? 'desc' : 'asc';
   };
 
+  const getSortLabel = (header) => {
+    const isActiveSort = sortConfig?.key === header;
+    const currentDirection = isActiveSort ? (sortConfig.direction === 'asc' ? 'stigende' : 'synkende') : 'ikke sortert';
+    const nextDirection = getNextSortDirection(header) === 'asc' ? 'stigende' : 'synkende';
+
+    return `Sorter etter ${header}. Nå ${currentDirection}. Aktiver for ${nextDirection} sortering.`;
+  };
+
   const handleExportExcel = () => {
     exportToExcel(sortedData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
@@ -182,11 +190,12 @@ export default function ResultsView({ results, queryName }) {
             <thead className="bg-gray-50 text-gray-700 font-semibold">
               <tr>
                 {headers.map(header => (
-                  <th key={header} className="px-6 py-3 uppercase tracking-wider whitespace-nowrap" aria-sort={sortConfig?.key === header ? (sortConfig.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                  <th key={header} className="px-6 py-3 uppercase tracking-wider whitespace-nowrap">
                     <button
                       type="button"
                       onClick={() => handleSort(header)}
-                      aria-label={`Sorter etter ${header} ${getNextSortDirection(header) === 'asc' ? 'stigende' : 'synkende'}`}
+                      aria-label={getSortLabel(header)}
+                      aria-pressed={sortConfig?.key === header}
                       className="flex items-center gap-2 cursor-pointer"
                     >
                       <span>{header}</span>
