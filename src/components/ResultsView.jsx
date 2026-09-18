@@ -182,12 +182,12 @@ export default function ResultsView({ results, queryName }) {
                       <span>{header}</span>
                       {sortConfig?.key === header ? (
                         sortConfig.direction === 'asc' ? (
-                          <ArrowUp className="h-4 w-4" />
+                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
                         ) : (
-                          <ArrowDown className="h-4 w-4" />
+                          <ArrowDown className="h-4 w-4" aria-hidden="true" />
                         )
                       ) : (
-                        <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                        <ArrowUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
                       )}
                     </button>
                   </th>
