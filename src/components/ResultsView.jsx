@@ -1,5 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, Settings2, SlidersHorizontal, Split } from 'lucide-react';
+import { 
+  ArrowDown, 
+  ArrowUp, 
+  ArrowUpDown, 
+  ArrowLeftRight, 
+  Download, 
+  Table, 
+  FileSpreadsheet, 
+  ChevronLeft, 
+  ChevronRight, 
+  Settings2, 
+  SlidersHorizontal, 
+  Split 
+} from 'lucide-react';
 import { exportToExcel, exportToCsv } from '../utils/fileParser';
 import { 
   pivotWordsAsRows, 
@@ -11,7 +24,8 @@ import {
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
-  const [viewMode, setViewMode] = useState('grand_total'); // 'grand_total', 'long', 'pivot_meta_words', 'pivot_meta_docs', 'pivot_words', 'pivot_docs'
+  const [viewMode, setViewMode] = useState('grand_total'); // 'grand_total', 'pivot_meta', 'pivot_docs', 'long'
+  const [isTransposed, setIsTransposed] = useState(false); // default: false (Ord som rader)
   const [userSelectedMetaCol, setUserSelectedMetaCol] = useState('');
   const [explodeSlash, setExplodeSlash] = useState(true);
   const [sortConfig, setSortConfig] = useState(null);
@@ -40,37 +54,45 @@ export default function ResultsView({ results, queryName }) {
 
   // Derive metadata pivot results if in metadata mode
   const metaPivotResult = useMemo(() => {
-    if (viewMode === 'pivot_meta_words') {
-      return pivotWordsByMetadata(results, selectedMetaCol, explodeSlash);
-    }
-    if (viewMode === 'pivot_meta_docs') {
-      return pivotMetadataByWords(results, selectedMetaCol, explodeSlash);
-    }
-    return null;
-  }, [results, viewMode, selectedMetaCol, explodeSlash]);
+    if (viewMode !== 'pivot_meta') return null;
+    return isTransposed
+      ? pivotMetadataByWords(results, selectedMetaCol, explodeSlash)
+      : pivotWordsByMetadata(results, selectedMetaCol, explodeSlash);
+  }, [results, viewMode, isTransposed, selectedMetaCol, explodeSlash]);
 
-  // Derive data based on view mode
+  // Derive document pivot results if in document pivot mode
+  const docPivotResult = useMemo(() => {
+    if (viewMode !== 'pivot_docs') return null;
+    return isTransposed
+      ? pivotDocsAsRows(results)
+      : pivotWordsAsRows(results);
+  }, [results, viewMode, isTransposed]);
+
+  // Derive data based on view mode and transpose state
   const activeData = useMemo(() => {
     switch (viewMode) {
       case 'grand_total':
         return aggregateGrandTotal(results);
-      case 'pivot_meta_words':
+      case 'pivot_meta':
         return metaPivotResult?.data || [];
-      case 'pivot_meta_docs':
-        return metaPivotResult?.data || [];
-      case 'pivot_words':
-        return pivotWordsAsRows(results);
       case 'pivot_docs':
-        return pivotDocsAsRows(results);
+        return docPivotResult || [];
       case 'long':
       default:
         return results;
     }
-  }, [results, viewMode, metaPivotResult]);
+  }, [results, viewMode, metaPivotResult, docPivotResult]);
 
   // Handle mode change
   const handleModeChange = (e) => {
     setViewMode(e.target.value);
+    setIsTransposed(false); // Reset to default (Ord som rader)
+    setSortConfig(null);
+    setPage(0);
+  };
+
+  const handleToggleTranspose = () => {
+    setIsTransposed(prev => !prev);
     setSortConfig(null);
     setPage(0);
   };
@@ -91,20 +113,24 @@ export default function ResultsView({ results, queryName }) {
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
 
-    if (viewMode === 'pivot_meta_words') {
-      return ['word', ...(metaPivotResult?.columns || [])];
-    } else if (viewMode === 'pivot_meta_docs') {
-      return [selectedMetaCol, ...(metaPivotResult?.columns || [])];
-    } else if (viewMode === 'pivot_words') {
-      const allKeys = Object.keys(activeData[0]);
-      return ['word', ...allKeys.filter(k => k !== 'word')];
+    if (viewMode === 'pivot_meta') {
+      return isTransposed
+        ? [selectedMetaCol, ...(metaPivotResult?.columns || [])]
+        : ['word', ...(metaPivotResult?.columns || [])];
     } else if (viewMode === 'pivot_docs') {
-      const allKeys = Object.keys(activeData[0]);
-      const metadata = ['dhlabid', 'urn', 'title', 'authors', 'year'];
-      const availableMeta = metadata.filter(k => allKeys.includes(k));
-      const otherMeta = allKeys.filter(k => !metadata.includes(k) && isNaN(activeData[0][k]) && k !== 'dhlabid');
-      const words = allKeys.filter(k => !availableMeta.includes(k) && !otherMeta.includes(k));
-      return [...availableMeta, ...otherMeta, ...words];
+      if (!isTransposed) {
+        // Words as rows -> 'word', followed by dhlabids
+        const allKeys = Object.keys(activeData[0]);
+        return ['word', ...allKeys.filter(k => k !== 'word')];
+      } else {
+        // Documents as rows -> metadata columns, followed by words
+        const allKeys = Object.keys(activeData[0]);
+        const metadata = ['dhlabid', 'urn', 'title', 'authors', 'year'];
+        const availableMeta = metadata.filter(k => allKeys.includes(k));
+        const otherMeta = allKeys.filter(k => !metadata.includes(k) && isNaN(activeData[0][k]) && k !== 'dhlabid');
+        const words = allKeys.filter(k => !availableMeta.includes(k) && !otherMeta.includes(k));
+        return [...availableMeta, ...otherMeta, ...words];
+      }
     } else if (viewMode === 'grand_total') {
       return ['word', 'total_freq', 'docs_count'];
     } else {
@@ -114,7 +140,7 @@ export default function ResultsView({ results, queryName }) {
       const others = allKeys.filter(k => !prioritized.includes(k));
       return [...prioritized, ...others];
     }
-  }, [activeData, viewMode, selectedMetaCol, metaPivotResult]);
+  }, [activeData, viewMode, isTransposed, selectedMetaCol, metaPivotResult]);
 
   const numericColumns = useMemo(() => {
     return headers.reduce((acc, header) => {
@@ -185,16 +211,19 @@ export default function ResultsView({ results, queryName }) {
     return `Sorter etter ${header} ${nextDirection}`;
   };
 
-  const isMetaMode = viewMode === 'pivot_meta_words' || viewMode === 'pivot_meta_docs';
+  const isPivotMode = viewMode === 'pivot_meta' || viewMode === 'pivot_docs';
+  const isMetaMode = viewMode === 'pivot_meta';
 
   const handleExportExcel = () => {
     const metaSuffix = isMetaMode ? `_${selectedMetaCol}` : '';
-    exportToExcel(sortedData, `korpus_${viewMode}${metaSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    const transSuffix = isPivotMode ? (isTransposed ? '_transponert' : '_ord_rader') : '';
+    exportToExcel(sortedData, `korpus_${viewMode}${metaSuffix}${transSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
 
   const handleExportCsv = () => {
     const metaSuffix = isMetaMode ? `_${selectedMetaCol}` : '';
-    exportToCsv(sortedData, `korpus_${viewMode}${metaSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    const transSuffix = isPivotMode ? (isTransposed ? '_transponert' : '_ord_rader') : '';
+    exportToCsv(sortedData, `korpus_${viewMode}${metaSuffix}${transSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
   };
 
   return (
@@ -221,13 +250,31 @@ export default function ResultsView({ results, queryName }) {
                 className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer outline-none pr-6"
               >
                 <option value="grand_total">Totalfrekvens (Grand Total)</option>
-                <option value="pivot_meta_words">Krysstabell (Ord x Metadata)</option>
-                <option value="pivot_meta_docs">Krysstabell (Metadata x Ord)</option>
-                <option value="pivot_words">Krysstabell (Ord x Dokument)</option>
-                <option value="pivot_docs">Krysstabell (Dokument x Ord)</option>
+                <option value="pivot_meta">Krysstabell (Metadata)</option>
+                <option value="pivot_docs">Krysstabell (Dokumenter)</option>
                 <option value="long">Standard (Langformat)</option>
               </select>
             </div>
+
+            {/* Dedicated Transpose Button for cross-tables */}
+            {isPivotMode && (
+              <button
+                type="button"
+                onClick={handleToggleTranspose}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                  isTransposed 
+                    ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+                title="Bytt om rader og kolonner (transponer tabellen)"
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                <span>Transponer</span>
+                <span className="text-xs text-gray-500 font-normal ml-0.5">
+                  ({isTransposed ? 'Ord i kolonner' : 'Ord i rader'})
+                </span>
+              </button>
+            )}
           </div>
           
           <div className="flex space-x-2">
