@@ -7,6 +7,12 @@ Hver gang du som agent har fullført en oppgave (eller en økt), MÅ du legge ti
 
 ---
 
+### [2026-10-13] - Antigravity (Gemini)
+- Implementerte krysstabeller (pivot) med aggregering mot vilkårlige metadatakolonner (f.eks. Ord x År, Ord x Sted, Ord x Emneord/Subject).
+- La til automatisk eksplodering/oppsplitting av flerverdier skilt med `/` (f.eks. emneord/sjangre) med en valgfri avkrysningsboks i UI.
+- La til støtte for transponering av metadata-krysstabeller (både `Ord x Metadata` og `Metadata x Ord`).
+- Sørget for at klikkbar sortering og eksport (CSV/Excel) fungerer sømløst med de nye metadata-visningene.
+
 ### [2026-09-18] - Copilot
 - La til klikkbar sortering i resultat-tabellen slik at brukeren kan sortere på ønsket kolonne.
 - La til stigende/synkende sorteringsveksling og visuelle indikatorer i kolonneoverskriftene.
