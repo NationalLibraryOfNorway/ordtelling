@@ -1,32 +1,110 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, Table, FileSpreadsheet, ChevronLeft, ChevronRight, Settings2 } from 'lucide-react';
+import { 
+  ArrowDown, 
+  ArrowUp, 
+  ArrowUpDown, 
+  ArrowLeftRight, 
+  Download, 
+  Table, 
+  FileSpreadsheet, 
+  ChevronLeft, 
+  ChevronRight, 
+  Settings2, 
+  SlidersHorizontal, 
+  Split 
+} from 'lucide-react';
 import { exportToExcel, exportToCsv } from '../utils/fileParser';
-import { pivotWordsAsRows, pivotDocsAsRows, aggregateGrandTotal } from '../utils/pivot';
+import { 
+  pivotWordsAsRows, 
+  pivotDocsAsRows, 
+  aggregateGrandTotal, 
+  pivotWordsByMetadata, 
+  pivotMetadataByWords 
+} from '../utils/pivot';
 
 export default function ResultsView({ results, queryName }) {
   const [page, setPage] = useState(0);
-  const [viewMode, setViewMode] = useState('grand_total'); // 'long', 'grand_total', 'pivot_words', 'pivot_docs'
+  const [viewMode, setViewMode] = useState('grand_total'); // 'grand_total', 'pivot_meta', 'pivot_docs', 'long'
+  const [isTransposed, setIsTransposed] = useState(false); // default: false (Ord som rader)
+  const [userSelectedMetaCol, setUserSelectedMetaCol] = useState('');
+  const [explodeSlash, setExplodeSlash] = useState(true);
   const [sortConfig, setSortConfig] = useState(null);
   const rowsPerPage = 50;
 
-  // Derive data based on view mode
+  // Extract all available metadata columns from the corpus data
+  const availableMetaColumns = useMemo(() => {
+    if (!results || results.length === 0) return [];
+    const nonMeta = new Set(['word', 'freq', 'total_words', 'dhlabid']);
+    const sample = results[0];
+    return Object.keys(sample).filter(k => !nonMeta.has(k));
+  }, [results]);
+
+  // Set a smart default metadata column (prioritize year/år, then subject/emne, etc.)
+  const selectedMetaCol = useMemo(() => {
+    if (userSelectedMetaCol && availableMetaColumns.includes(userSelectedMetaCol)) {
+      return userSelectedMetaCol;
+    }
+    if (availableMetaColumns.length > 0) {
+      const yearCol = availableMetaColumns.find(c => /year|år/i.test(c));
+      const subjectCol = availableMetaColumns.find(c => /subject|emne|sjanger|genre/i.test(c));
+      return yearCol || subjectCol || availableMetaColumns[0];
+    }
+    return '';
+  }, [availableMetaColumns, userSelectedMetaCol]);
+
+  // Derive metadata pivot results if in metadata mode
+  const metaPivotResult = useMemo(() => {
+    if (viewMode !== 'pivot_meta') return null;
+    return isTransposed
+      ? pivotMetadataByWords(results, selectedMetaCol, explodeSlash)
+      : pivotWordsByMetadata(results, selectedMetaCol, explodeSlash);
+  }, [results, viewMode, isTransposed, selectedMetaCol, explodeSlash]);
+
+  // Derive document pivot results if in document pivot mode
+  const docPivotResult = useMemo(() => {
+    if (viewMode !== 'pivot_docs') return null;
+    return isTransposed
+      ? pivotDocsAsRows(results)
+      : pivotWordsAsRows(results);
+  }, [results, viewMode, isTransposed]);
+
+  // Derive data based on view mode and transpose state
   const activeData = useMemo(() => {
     switch (viewMode) {
       case 'grand_total':
         return aggregateGrandTotal(results);
-      case 'pivot_words':
-        return pivotWordsAsRows(results);
+      case 'pivot_meta':
+        return metaPivotResult?.data || [];
       case 'pivot_docs':
-        return pivotDocsAsRows(results);
+        return docPivotResult || [];
       case 'long':
       default:
         return results;
     }
-  }, [results, viewMode]);
+  }, [results, viewMode, metaPivotResult, docPivotResult]);
 
   // Handle mode change
   const handleModeChange = (e) => {
     setViewMode(e.target.value);
+    setIsTransposed(false); // Reset to default (Ord som rader)
+    setSortConfig(null);
+    setPage(0);
+  };
+
+  const handleToggleTranspose = () => {
+    setIsTransposed(prev => !prev);
+    setSortConfig(null);
+    setPage(0);
+  };
+
+  const handleMetaColChange = (e) => {
+    setUserSelectedMetaCol(e.target.value);
+    setSortConfig(null);
+    setPage(0);
+  };
+
+  const handleExplodeToggle = () => {
+    setExplodeSlash(prev => !prev);
     setSortConfig(null);
     setPage(0);
   };
@@ -34,26 +112,35 @@ export default function ResultsView({ results, queryName }) {
   // Extract headers dynamically
   const headers = useMemo(() => {
     if (activeData.length === 0) return [];
-    const allKeys = Object.keys(activeData[0]);
-    
-    if (viewMode === 'pivot_words') {
-      return ['word', ...allKeys.filter(k => k !== 'word')];
+
+    if (viewMode === 'pivot_meta') {
+      return isTransposed
+        ? [selectedMetaCol, ...(metaPivotResult?.columns || [])]
+        : ['word', ...(metaPivotResult?.columns || [])];
     } else if (viewMode === 'pivot_docs') {
-      // Prioritize dhlabid and metadata, then words
-      const metadata = ['dhlabid', 'urn', 'title', 'authors', 'year']; // Common metadata fields
-      const availableMeta = metadata.filter(k => allKeys.includes(k));
-      const otherMeta = allKeys.filter(k => !metadata.includes(k) && isNaN(activeData[0][k]) && k !== 'dhlabid');
-      const words = allKeys.filter(k => !availableMeta.includes(k) && !otherMeta.includes(k));
-      return [...availableMeta, ...otherMeta, ...words];
+      if (!isTransposed) {
+        // Words as rows -> 'word', followed by dhlabids
+        const allKeys = Object.keys(activeData[0]);
+        return ['word', ...allKeys.filter(k => k !== 'word')];
+      } else {
+        // Documents as rows -> metadata columns, followed by words
+        const allKeys = Object.keys(activeData[0]);
+        const metadata = ['dhlabid', 'urn', 'title', 'authors', 'year'];
+        const availableMeta = metadata.filter(k => allKeys.includes(k));
+        const otherMeta = allKeys.filter(k => !metadata.includes(k) && isNaN(activeData[0][k]) && k !== 'dhlabid');
+        const words = allKeys.filter(k => !availableMeta.includes(k) && !otherMeta.includes(k));
+        return [...availableMeta, ...otherMeta, ...words];
+      }
     } else if (viewMode === 'grand_total') {
       return ['word', 'total_freq', 'docs_count'];
     } else {
       // Long mode
+      const allKeys = Object.keys(activeData[0]);
       const prioritized = ['dhlabid', 'word', 'freq', 'total_words'];
       const others = allKeys.filter(k => !prioritized.includes(k));
       return [...prioritized, ...others];
     }
-  }, [activeData, viewMode]);
+  }, [activeData, viewMode, isTransposed, selectedMetaCol, metaPivotResult]);
 
   const numericColumns = useMemo(() => {
     return headers.reduce((acc, header) => {
@@ -124,60 +211,128 @@ export default function ResultsView({ results, queryName }) {
     return `Sorter etter ${header} ${nextDirection}`;
   };
 
+  const isPivotMode = viewMode === 'pivot_meta' || viewMode === 'pivot_docs';
+  const isMetaMode = viewMode === 'pivot_meta';
+
   const handleExportExcel = () => {
-    exportToExcel(sortedData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    const metaSuffix = isMetaMode ? `_${selectedMetaCol}` : '';
+    const transSuffix = isPivotMode ? (isTransposed ? '_transponert' : '_ord_rader') : '';
+    exportToExcel(sortedData, `korpus_${viewMode}${metaSuffix}${transSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
   };
 
   const handleExportCsv = () => {
-    exportToCsv(sortedData, `korpus_${viewMode}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+    const metaSuffix = isMetaMode ? `_${selectedMetaCol}` : '';
+    const transSuffix = isPivotMode ? (isTransposed ? '_transponert' : '_ord_rader') : '';
+    exportToCsv(sortedData, `korpus_${viewMode}${metaSuffix}${transSuffix}_${queryName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
   };
 
   return (
     <div className="flex flex-col space-y-6">
       
       {/* Action bar */}
-      <div className="flex flex-wrap items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-4">
         
-        <div className="flex items-center space-x-4 mb-4 sm:mb-0">
-          <div className="flex items-center text-gray-700">
-            <Table className="mr-2 h-5 w-5 text-blue-500" />
-            <span className="font-medium">Fant {activeData.length.toLocaleString('no-NO')} rader</span>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center text-gray-700">
+              <Table className="mr-2 h-5 w-5 text-blue-500" />
+              <span className="font-medium">Fant {activeData.length.toLocaleString('no-NO')} rader</span>
+            </div>
+            
+            <div className="h-5 w-px bg-gray-300 hidden sm:block"></div>
+            
+            {/* View Mode Selector */}
+            <div className="flex items-center bg-gray-50 rounded-md border border-gray-200 px-2 py-1">
+              <Settings2 className="h-4 w-4 text-gray-500 mr-2" />
+              <select 
+                value={viewMode} 
+                onChange={handleModeChange}
+                className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer outline-none pr-6"
+              >
+                <option value="grand_total">Totalfrekvens (Grand Total)</option>
+                <option value="pivot_meta">Krysstabell (Metadata)</option>
+                <option value="pivot_docs">Krysstabell (Dokumenter)</option>
+                <option value="long">Standard (Langformat)</option>
+              </select>
+            </div>
+
+            {/* Dedicated Transpose Button for cross-tables */}
+            {isPivotMode && (
+              <button
+                type="button"
+                onClick={handleToggleTranspose}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors cursor-pointer ${
+                  isTransposed 
+                    ? 'bg-blue-50 border-blue-300 text-blue-700' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+                title="Bytt om rader og kolonner (transponer tabellen)"
+              >
+                <ArrowLeftRight className="h-4 w-4" />
+                <span>Transponer</span>
+                <span className="text-xs text-gray-500 font-normal ml-0.5">
+                  ({isTransposed ? 'Ord i kolonner' : 'Ord i rader'})
+                </span>
+              </button>
+            )}
           </div>
           
-          <div className="h-6 w-px bg-gray-300 mx-1 hidden sm:block"></div>
-          
-          {/* View Mode Selector */}
-          <div className="flex items-center bg-gray-50 rounded-md border border-gray-200 p-1">
-            <Settings2 className="h-4 w-4 text-gray-500 ml-2 mr-1" />
-            <select 
-              value={viewMode} 
-              onChange={handleModeChange}
-              className="bg-transparent border-none text-sm font-medium text-gray-700 focus:ring-0 cursor-pointer outline-none py-1 pr-8"
+          <div className="flex space-x-2">
+            <button 
+              onClick={handleExportCsv}
+              className="flex items-center px-3.5 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
             >
-              <option value="grand_total">Totalfrekvens (Grand Total)</option>
-              <option value="long">Standard (Langformat)</option>
-              <option value="pivot_words">Krysstabell (Ord som rader)</option>
-              <option value="pivot_docs">Krysstabell (Bøker som rader)</option>
-            </select>
+              <Download className="mr-1.5 h-4 w-4 text-gray-500" />
+              CSV
+            </button>
+            <button 
+              onClick={handleExportExcel}
+              className="flex items-center px-3.5 py-1.5 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors shadow-sm cursor-pointer"
+            >
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+              Excel
+            </button>
           </div>
         </div>
-        
-        <div className="flex space-x-3">
-          <button 
-            onClick={handleExportCsv}
-            className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <Download className="mr-2 h-4 w-4 text-gray-500" />
-            CSV
-          </button>
-          <button 
-            onClick={handleExportExcel}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors shadow-sm"
-          >
-            <FileSpreadsheet className="mr-2 h-4 w-4" />
-            Excel
-          </button>
-        </div>
+
+        {/* Metadata Configuration Bar when in Metadata Cross-tabulation mode */}
+        {isMetaMode && (
+          <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-gray-100 text-sm bg-blue-50/50 -mx-4 -mb-4 p-4 rounded-b-lg">
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+              <span className="font-medium text-gray-700">Metadatakolonne:</span>
+              <select
+                value={selectedMetaCol}
+                onChange={handleMetaColChange}
+                className="bg-white border border-gray-300 rounded-md px-3 py-1 font-medium text-gray-800 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+              >
+                {availableMetaColumns.length === 0 ? (
+                  <option value="">Ingen metadatakolonner funnet</option>
+                ) : (
+                  availableMetaColumns.map(col => (
+                    <option key={col} value={col}>
+                      {col}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none text-gray-700 hover:text-gray-900">
+              <input
+                type="checkbox"
+                checked={explodeSlash}
+                onChange={handleExplodeToggle}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+              />
+              <span className="flex items-center gap-1 text-sm font-medium">
+                <Split className="h-3.5 w-3.5 text-gray-500" />
+                Eksploder flerverdier skilt med <code className="bg-gray-200 px-1 py-0.5 rounded text-xs text-gray-800">/</code> (f.eks. emneord)
+              </span>
+            </label>
+          </div>
+        )}
+
       </div>
 
       {/* Table */}
@@ -196,14 +351,14 @@ export default function ResultsView({ results, queryName }) {
                       type="button"
                       onClick={() => handleSort(header)}
                       aria-label={getSortActionLabel(header)}
-                      className="flex items-center gap-2 cursor-pointer"
+                      className="flex items-center gap-2 cursor-pointer font-semibold text-gray-700 hover:text-blue-600 transition-colors"
                     >
                       <span>{header}</span>
                       {sortConfig?.key === header ? (
                         sortConfig.direction === 'asc' ? (
-                          <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                          <ArrowUp className="h-4 w-4 text-blue-600" aria-hidden="true" />
                         ) : (
-                          <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                          <ArrowDown className="h-4 w-4 text-blue-600" aria-hidden="true" />
                         )
                       ) : (
                         <ArrowUpDown className="h-4 w-4 text-gray-400" aria-hidden="true" />
@@ -237,14 +392,14 @@ export default function ResultsView({ results, queryName }) {
               <button 
                 onClick={() => setPage(Math.max(0, currentPage - 1))}
                 disabled={currentPage === 0}
-                className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button 
                 onClick={() => setPage(Math.min(totalPages - 1, currentPage + 1))}
                 disabled={currentPage === totalPages - 1}
-                className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                className="p-2 border border-gray-300 rounded-md bg-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors cursor-pointer"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
