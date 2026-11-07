@@ -57,6 +57,28 @@ export const validateCorpusData = (data) => {
 };
 
 /**
+ * Checks if the data contains an 'urn' column (even if dhlabid is missing).
+ * @param {Array} data 
+ * @returns {boolean}
+ */
+export const hasUrnColumn = (data) => {
+  if (!data || data.length === 0) return false;
+  const keys = Object.keys(data[0]).map(k => k.toLowerCase());
+  return keys.includes('urn');
+};
+
+/**
+ * Extracts distinct URNs from arbitrary raw text (or CSV/TSV/pasted lists).
+ * @param {string} text 
+ * @returns {Array<string>} Unique URNs
+ */
+export const extractUrnsFromText = (text) => {
+  if (!text) return [];
+  const matches = text.match(/URN:NBN:[^\s,;'"<>]+/gi) || [];
+  return Array.from(new Set(matches.map(u => u.trim())));
+};
+
+/**
  * Exports data to an Excel file.
  * @param {Array} data - The array of objects to export
  * @param {string} filename - The desired filename
@@ -87,4 +109,3 @@ export const exportToCsv = (data, filename = 'resultater.csv') => {
   link.click();
   document.body.removeChild(link);
 };
-

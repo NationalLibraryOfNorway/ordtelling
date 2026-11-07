@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Upload, FileCheck, AlertCircle } from 'lucide-react';
+import { Upload, AlertCircle } from 'lucide-react';
 import { parseCorpusFile, validateCorpusData } from '../utils/fileParser';
 
 export default function FileUploader({ onCorpusLoaded }) {

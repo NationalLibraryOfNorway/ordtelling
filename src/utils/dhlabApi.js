@@ -1,4 +1,6 @@
 const DHLAB_API_URL = "https://api.nb.no/dhlab/frequencies";
+const DHLAB_BUILD_CORPUS_URL = "https://api.nb.no/dhlab/build_corpus";
+const DHLAB_METADATA_URL = "https://api.nb.no/dhlab/get_metadata";
 
 /**
  * Samples a random subset of URNs if the corpus is too large.
@@ -20,12 +22,105 @@ const sampleUrns = (urns, maxLimit = 500) => {
  * @param {number} size 
  * @returns {Array<Array>}
  */
-const chunkArray = (array, size) => {
+export const chunkArray = (array, size) => {
   const chunks = [];
   for (let i = 0; i < array.length; i += size) {
     chunks.push(array.slice(i, i + size));
   }
   return chunks;
+};
+
+/**
+ * Converts DHLab DataFrame-style JSON dictionary to an array of objects.
+ * Format from DHLab: { colA: { "0": val, "1": val }, colB: { "0": val, "1": val } }
+ * @param {Object} cJson 
+ * @returns {Array<Object>}
+ */
+export const parseDhlabCorpusResponse = (cJson) => {
+  if (!cJson || typeof cJson !== 'object') return [];
+  
+  // Identify key providing row indices (preferably 'urn' or 'dhlabid')
+  const indexSource = cJson.urn || cJson.dhlabid || Object.values(cJson)[0];
+  if (!indexSource || typeof indexSource !== 'object') return [];
+  
+  const rowIndices = Object.keys(indexSource);
+  const columnNames = Object.keys(cJson);
+  
+  return rowIndices.map(idx => {
+    const row = {};
+    columnNames.forEach(col => {
+      row[col] = cJson[col]?.[idx] ?? '';
+    });
+    return row;
+  });
+};
+
+/**
+ * Builds a corpus via the DHLab API (build_corpus).
+ * @param {Object} params - Search criteria: { doctype, subject, author, title, from_year, to_year, limit }
+ * @returns {Promise<Array<Object>>} List of corpus document objects
+ */
+export const buildCorpusFromApi = async (params = {}) => {
+  const cleanParams = {};
+  if (params.doctype) cleanParams.doctype = params.doctype;
+  if (params.subject && params.subject.trim()) cleanParams.subject = params.subject.trim();
+  if (params.author && params.author.trim()) cleanParams.author = params.author.trim();
+  if (params.title && params.title.trim()) cleanParams.title = params.title.trim();
+  if (params.from_year) cleanParams.from_year = Number(params.from_year);
+  if (params.to_year) cleanParams.to_year = Number(params.to_year);
+  if (params.limit) cleanParams.limit = Number(params.limit);
+
+  const response = await fetch(DHLAB_BUILD_CORPUS_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(cleanParams)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Feil ved oppslag mot DHLab build_corpus (status: ${response.status})`);
+  }
+
+  const cJson = await response.json();
+  return parseDhlabCorpusResponse(cJson);
+};
+
+/**
+ * Fetches metadata for a list of URNs via get_metadata.
+ * Batches requests in chunks of 500 to keep payloads resilient.
+ * @param {Array<string>} urns 
+ * @param {Function} onProgress - Progress callback (0-100)
+ * @returns {Promise<Array<Object>>}
+ */
+export const getMetadataForUrns = async (urns, onProgress = () => {}) => {
+  if (!urns || urns.length === 0) return [];
+  
+  const BATCH_SIZE = 500;
+  const chunks = chunkArray(urns, BATCH_SIZE);
+  let allRows = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const response = await fetch(DHLAB_METADATA_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ urns: chunk })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Feil ved oppslag mot DHLab get_metadata (status: ${response.status})`);
+    }
+
+    const cJson = await response.json();
+    const rows = parseDhlabCorpusResponse(cJson);
+    allRows = allRows.concat(rows);
+    onProgress(Math.round(((i + 1) / chunks.length) * 100));
+  }
+
+  return allRows;
 };
 
 /**
@@ -67,7 +162,6 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   if (!corpusData || corpusData.length === 0) return [];
 
   // Extract URNs from the corpus
-  // We make sure to find the urn key regardless of case, although we validated it as lowercase earlier
   const getUrn = (row) => row[Object.keys(row).find(k => k.toLowerCase() === 'urn')];
   const getDhlabId = (row) => row[Object.keys(row).find(k => k.toLowerCase() === 'dhlabid')];
 
@@ -79,7 +173,6 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
     const urn = getUrn(row);
     const dhlabid = getDhlabId(row);
     if (urn) {
-      // In case dhlabid is numeric in API but string in CSV, we map by string
       metadataMap.set(String(dhlabid), row);
       allUrns.push(urn);
     }
@@ -90,9 +183,6 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   // If fetching "all words" on a huge corpus, sample it down to avoid crashing the API/Browser
   const targetUrns = isAllWords ? sampleUrns(allUrns, 500) : allUrns;
 
-  // We batch URNs to not send overly large JSON payloads. 
-  // For "all words", we might still batch if we want, but 500 URNs in one go is usually fine.
-  // For wordlists, we can process larger amounts by chunking.
   const BATCH_SIZE = 500; 
   const urnChunks = chunkArray(targetUrns, BATCH_SIZE);
   
@@ -103,18 +193,14 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
     try {
       let batchResult = await fetchFrequenciesBatch(chunk, words);
       
-      // The API returns differently based on if words were provided:
-      // Words provided: [ [dhlabid, word, freq, total], ... ]
-      // No words (all): [ [[dhlabid, word, freq], ...], [[dhlabid, word, freq], ...] ]
       if (isAllWords && Array.isArray(batchResult) && batchResult.length > 0) {
-        // Flatten the array by one level
         batchResult = batchResult.flat();
       }
       
       allResults = allResults.concat(batchResult);
     } catch (error) {
       console.error(`Feil ved henting av batch ${i + 1}:`, error);
-      throw error; // Propagate error or handle gracefully
+      throw error;
     }
     
     // Update progress
@@ -122,9 +208,7 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
   }
 
   // Combine the results with the metadata
-  // batchResult format: [dhlabid, word, freq, total_words (optional)]
   const combinedResults = allResults.map(apiRow => {
-    // Check if apiRow is actually an array to prevent crashes on weird responses
     if (!Array.isArray(apiRow)) return null;
     
     const [dhlabid, word, freq, total] = apiRow;
@@ -137,7 +221,7 @@ export const getFrequencies = async (corpusData, words = [], onProgress = () => 
       freq,
       total_words: total || ""
     };
-  }).filter(Boolean); // Remove any nulls from invalid rows
+  }).filter(Boolean);
 
   return combinedResults;
 };
