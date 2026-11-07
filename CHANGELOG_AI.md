@@ -7,6 +7,14 @@ Hver gang du som agent har fullført en oppgave (eller en økt), MÅ du legge ti
 
 ---
 
+### [2026-11-07] - Antigravity (Gemini)
+- Bygget en interaktiv korpusbygger (`CorpusBuilder.jsx`) inspirert av `doc-to-vec` med tre moduser:
+  1. **Last opp korpusfil:** CSV/Excel-opplasting med automatisk deteksjon og tilbud om automatisk berikelse via NB API dersom filen mangler `dhlabid`.
+  2. **Bygg fra søk (NB API):** Metadata-søk direkte mot `https://api.nb.no/dhlab/build_corpus` med filtre for emneord, forfatter, tittel, dokumenttype (digibok/digitidsskrift), årintervall og antall.
+  3. **Hent fra URN-liste:** Lim inn eller last opp URN-er i fritekst/CSV/TSV, med automatisk regex-uttrekking og batch-henting av full metadata via `https://api.nb.no/dhlab/get_metadata`.
+- Utvidet det aktive korpus-banneret i `App.jsx` med direkte eksportknapper for det bygde/lastede korpuset (Excel og CSV), samt en sammenleggbar forhåndsvisningstabell for korpusdokumentene.
+- Ryddet opp i alle linter-advarsler (0 feil, 0 advarsler fra `oxlint`).
+
 ### [2026-10-13] - Antigravity (Gemini)
 - Implementerte krysstabeller (pivot) med aggregering mot vilkårlige metadatakolonner (f.eks. Ord x År, Ord x Sted, Ord x Emneord/Subject).
 - La til automatisk eksplodering/oppsplitting av flerverdier skilt med `/` (f.eks. emneord/sjangre) med en valgfri avkrysningsboks i UI.

@@ -21,7 +21,7 @@ export function WordlistForm({ corpus, onResult }) {
     try {
       const results = await getFrequencies(corpus.data, words, setProgress);
       onResult(results, `Ordliste (${words.length} ord)`);
-    } catch (err) {
+    } catch {
       setError("Kunne ikke hente frekvenser. Prøv igjen med færre ord eller færre tekster.");
     } finally {
       setLoading(false);
@@ -77,7 +77,7 @@ export function AllWordsForm({ corpus, onResult }) {
       // Empty array signifies "all words"
       const results = await getFrequencies(corpus.data, [], setProgress);
       onResult(results, "Alle ord");
-    } catch (err) {
+    } catch {
       setError("Kunne ikke hente frekvenser. Prøv igjen senere.");
     } finally {
       setLoading(false);
